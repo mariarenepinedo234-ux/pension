@@ -5,6 +5,7 @@ export function inventoryStore({db,all,get,run,transaction,today,stamp,openCash,
  CREATE TABLE IF NOT EXISTS inventory_movements(id INTEGER PRIMARY KEY,product_id INTEGER NOT NULL REFERENCES products(id),quantity INTEGER NOT NULL,type TEXT NOT NULL,date TEXT NOT NULL,created_at TEXT NOT NULL,supplier TEXT NOT NULL DEFAULT '',note TEXT NOT NULL DEFAULT '',cost INTEGER NOT NULL DEFAULT 0,expense_id INTEGER REFERENCES expenses(id),order_id INTEGER REFERENCES orders(id),actor TEXT NOT NULL DEFAULT '');
  CREATE TABLE IF NOT EXISTS legacy_products(item_id INTEGER PRIMARY KEY REFERENCES items(id),product_id INTEGER NOT NULL REFERENCES products(id));
  CREATE TABLE IF NOT EXISTS migrations(name TEXT PRIMARY KEY);`);
+ if(!db.prepare('PRAGMA table_info(products)').all().some(c=>c.name==='unit_cost')) db.exec('ALTER TABLE products ADD COLUMN unit_cost INTEGER');
  if(!get("SELECT name FROM migrations WHERE name='shared-beverages'")) transaction(()=>{
   const groups=new Map();
   for(const item of all("SELECT * FROM items WHERE kind='drink' AND combo_eligible=0 ORDER BY date DESC,id DESC")) {
@@ -24,10 +25,11 @@ export function inventoryStore({db,all,get,run,transaction,today,stamp,openCash,
   if(body.photo!==undefined && (typeof body.photo!=='string' || body.photo.length>200000 || (body.photo && !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(body.photo)))) fail('Foto inválida. Usa una imagen JPEG, PNG o WebP de hasta 150 KB.');
   const name=String(body.name||'').trim().slice(0,100);if(!name)fail('Escribe el nombre de la bebida.');
   const price=money(body.price),minimum=integer(body.minimum),active=body.active===false?0:1;
+  let unitCost=null; if(body.unit_cost!==undefined && body.unit_cost!==null && body.unit_cost!==''){const n=Number(body.unit_cost);if(!Number.isFinite(n)||n<0||n>1000000)fail('Costo unitario inválido.');unitCost=Math.round(n*100);}
   const duplicate=get('SELECT id FROM products WHERE lower(trim(name))=lower(?) AND id<>?',name,Number(body.id)||0);if(duplicate)fail('Ya existe una bebida con ese nombre.');
-  if(body.id){if(!get('SELECT id FROM products WHERE id=?',Number(body.id)))fail('Bebida no encontrada.',404);run('UPDATE products SET name=?,price=?,minimum=?,active=? WHERE id=?',name,price,minimum,active,Number(body.id));if(body.photo!==undefined)run('UPDATE products SET photo=? WHERE id=?',body.photo,Number(body.id));return Number(body.id);}
+  if(body.id){if(!get('SELECT id FROM products WHERE id=?',Number(body.id)))fail('Bebida no encontrada.',404);run('UPDATE products SET name=?,price=?,minimum=?,active=? WHERE id=?',name,price,minimum,active,Number(body.id));if(body.photo!==undefined)run('UPDATE products SET photo=? WHERE id=?',body.photo,Number(body.id));if(body.unit_cost!==undefined)run('UPDATE products SET unit_cost=? WHERE id=?',unitCost,Number(body.id));return Number(body.id);}
   const id=Number(run('INSERT INTO products(name,price,minimum) VALUES (?,?,?)',name,price,minimum).lastInsertRowid);
-  if(body.photo!==undefined)run('UPDATE products SET photo=? WHERE id=?',body.photo,id);
+  if(body.photo!==undefined)run('UPDATE products SET photo=? WHERE id=?',body.photo,id); if(body.unit_cost!==undefined)run('UPDATE products SET unit_cost=? WHERE id=?',unitCost,id);
   const stock=integer(body.stock||0);if(stock)changeStock(id,stock,'opening',null);return id;
  });}
  function movement(body,actor='') {return transaction(()=>{

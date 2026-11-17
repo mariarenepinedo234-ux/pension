@@ -72,7 +72,7 @@ Para actualizar, detén el servidor, respalda la carpeta `data`, reemplaza los a
 - Una reserva ya cuenta contra el stock. Cobrarla o pasarla a cocina **no descuenta de nuevo**.
 - Los platos sueltos y los extras descuentan solo su producto. Las cantidades y los precios se validan en el servidor, no se confía en los importes del navegador.
 - Si no alcanza alguna porción, se rechaza el pedido entero: no se guarda una venta a medias. Los precios de pedidos existentes no cambian cuando se edita el menú.
-- Anular un pedido no pagado libera sus porciones una sola vez. Los pedidos pagados no se pueden anular en esta primera versión porque aún no implementa devoluciones. Tampoco se editan pedidos ya registrados.
+- Anular un pedido no pagado libera sus porciones una sola vez. Los pedidos pagados no se pueden anular en esta primera versión porque aún no implementa devoluciones. Las reservas sin pagar se pueden editar antes de enviarlas a cocina; los pedidos pagados o enviados no se pueden editar.
 - Las reservas no vencen automáticamente. Caja debe anular las que ya no correspondan; los comensales no pueden anularlas por sí mismos en esta versión.
 - Los importes se guardan en **centavos enteros de boliviano**, para evitar errores de coma flotante.
 - **Resultado estimado = cobros − gastos registrados.** No es utilidad contable: hay que registrar ingredientes, salarios, alquiler, servicios y demás costos. No hay contabilidad por devengado, valoración de inventario ni conciliación bancaria.
@@ -145,3 +145,11 @@ Registrar recetas no crea gastos de caja: documenta los pagos reales en **Caja y
 Al registrar una venta o reserva, incluida la reserva pública, selecciona **Consumir en el local** o **Para llevar** para todo el pedido. La modalidad se conserva al reiniciar y aparece en Pedidos y reservas y en los tickets de Cocina; no cambia el precio ni el inventario. Los pedidos anteriores a esta actualización muestran **Consumo sin especificar**, para no atribuirles una modalidad que no fue registrada. En un pedido con ambas modalidades, registra dos pedidos separados.
 
 La actualización agrega automáticamente las tablas de recetas y la modalidad de consumo al arrancar. Conserva usuarios, recetas, pedidos y demás datos existentes; respalda `data` con el servidor detenido antes de actualizar.
+
+## Guarniciones, edición de reservas y margen de bebidas
+
+En **Menú del día**, agrega las ensaladas u otras opciones como **Guarniciones**, con su precio y porciones. Cuando el menú tiene guarniciones, cada completo requiere elegir una y descuenta una porción; también se pueden vender por separado. Los menús que todavía no tengan guarniciones conservan el comportamiento anterior: agrega al menos una para activar la elección. Las recetas también admiten esta categoría.
+
+En **Pedidos y reservas**, administración o caja puede elegir **Editar pedido** para una reserva pendiente de pago antes de enviarla a cocina. Quita o agrega líneas y vuelve a elegir el completo si deseas cambiar su segundo o guarnición. Se conserva el número; al guardar se aplican los precios actuales y se comprueban las existencias. Si la reserva fue modificada por otra persona o no hay stock, no se guardan los cambios. Las reservas antiguas que no contienen el detalle estructurado deben armarse de nuevo en el editor. Los pedidos pagados o enviados a cocina no se pueden editar; el sistema todavía no implementa cobros adicionales ni devoluciones para ellos.
+
+En **Inventario de bebidas**, el costo de compra por botella es opcional. La tabla muestra el margen estimado como precio de venta actual menos ese costo. No es ganancia neta, no calcula resultados históricos ni registra automáticamente un gasto; actualiza el costo cuando cambie y registra los pagos reales de compras en Caja si corresponde.
