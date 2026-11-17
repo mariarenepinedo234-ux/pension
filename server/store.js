@@ -116,6 +116,45 @@ export function createStore(filename, { seed = true, now = () => new Date() } = 
     if(!previous && source==='staff' && body.payment) pay(id,body.payment);
     return {id,total,status:reservation?'reserved':'queued'};
   }); }
+  // Change selected components without repricing or rebuilding the rest of the order.
+  function changeCombo(id,body,actor) {return transaction(()=>{
+    const order=get('SELECT * FROM orders WHERE id=?',id);
+    if(!order || order.status!=='reserved') fail('Solo se pueden cambiar completos de reservas antes de enviarlas a cocina.',409);
+    if(order.date<today()) fail('No puedes modificar una reserva de una fecha pasada.',409);
+    if(body.revision===undefined || Number(body.revision)!==order.revision) fail('La reserva cambió. Actualiza la página antes de editarla.',409);
+    const line=get('SELECT * FROM lines WHERE id=? AND order_id=?',Number(body.lineId)||0,id);
+    let selection;try {selection=JSON.parse(line?.selection||'null');} catch {selection=null;}
+    if(!line || selection?.kind!=='combo') fail('Este completo no tiene el detalle necesario para cambiarlo.',409);
+    const quantity=Number(body.quantity);
+    if(!Number.isInteger(quantity)||quantity<1||quantity>line.quantity) fail('Cantidad de completos inválida.');
+    const findItem=(itemId,kind)=>{const item=get('SELECT * FROM items WHERE id=? AND date=? AND kind=?',Number(itemId)||0,order.date,kind);if(!item)fail('El plato elegido no está en este menú.');return item;};
+    const soup=findItem(selection.soupId,'soup'), oldMain=findItem(selection.mainId,'main'), main=findItem(body.mainId,'main');
+    const oldSide=selection.sideId?findItem(selection.sideId,'side'):null;
+    if(!oldSide && body.sideId) fail('Este completo no tiene una guarnición para cambiar.');
+    const side=oldSide?findItem(body.sideId,'side'):null;
+    const changes=[[oldMain,main],...(oldSide?[[oldSide,side]]:[])].filter(([oldItem,newItem])=>oldItem.id!==newItem.id);
+    if(!changes.length) fail('Elige un segundo o una guarnición diferente.');
+    for(const [oldItem,newItem] of changes){
+      const assigned=get('SELECT COALESCE(SUM(quantity),0) AS quantity FROM allocations WHERE order_id=? AND item_id=?',id,oldItem.id).quantity;
+      if(assigned<quantity) fail('No se pudo verificar las porciones de este pedido.',409);
+      if(newItem.stock-newItem.used<quantity) fail(`No alcanza ${newItem.name}. Quedan ${newItem.stock-newItem.used} porciones.`,409);
+    }
+    for(const [oldItem,newItem] of changes){
+      const assigned=get('SELECT COALESCE(SUM(quantity),0) AS quantity FROM allocations WHERE order_id=? AND item_id=?',id,oldItem.id).quantity;
+      run('DELETE FROM allocations WHERE order_id=? AND item_id=?',id,oldItem.id);
+      if(assigned>quantity)run('INSERT INTO allocations VALUES (?,?,?)',id,oldItem.id,assigned-quantity);
+      run('INSERT INTO allocations VALUES (?,?,?)',id,newItem.id,quantity);
+      run('UPDATE items SET used=used-? WHERE id=?',quantity,oldItem.id);
+      run('UPDATE items SET used=used+? WHERE id=?',quantity,newItem.id);
+    }
+    const updated={...selection,mainId:main.id,...(side?{sideId:side.id}:{})};
+    const label=`Completo · ${soup.name} + ${main.name}${side?' + '+side.name:''} + vaso de refresco incluido`;
+    if(quantity===line.quantity) run('UPDATE lines SET label=?,selection=? WHERE id=?',label,JSON.stringify(updated),line.id);
+    else {run('UPDATE lines SET quantity=quantity-? WHERE id=?',quantity,line.id);run('INSERT INTO lines(order_id,label,quantity,price,selection) VALUES (?,?,?,?,?)',id,label,quantity,line.price,JSON.stringify(updated));}
+    run('UPDATE orders SET revision=revision+1 WHERE id=?',id);
+    control.audit('reservation_combo_changed',String(id),actor,{quantity,before:{main:oldMain.name,side:oldSide?.name||null},after:{main:main.name,side:side?.name||null}});
+    return {id,total:order.total};
+  });}
   function pay(id,method) {
     if(!['cash','qr'].includes(method)) fail('Medio de pago inválido.'); openCash();
     const order=get('SELECT * FROM orders WHERE id=?',id); if(!order || order.status==='cancelled') fail('Pedido no disponible.');
@@ -186,5 +225,5 @@ export function createStore(filename, { seed = true, now = () => new Date() } = 
     return {from,to,income,spent,balance:income-spent,cash,qr,revenue,expenses,count:revenue.reduce((s,r)=>s+r.count,0)};
   }
   function snapshot(date) {reconcile();return {today:today(),date,menu:menu(date),orders:orders(date),cash:get('SELECT * FROM cash_days WHERE date=?',today()),report:report(date,date)};}
-  return {db,all,get,run,transaction,today,stamp,reconcile,openCash,menu,orders,createOrder,editOrder:(id,body,actor)=>createOrder(body,'staff',id,actor),pay,transition,saveMenu,recipes,saveRecipe,report,snapshot,...inventory,...control};
+  return {db,all,get,run,transaction,today,stamp,reconcile,openCash,menu,orders,createOrder,editOrder:(id,body,actor)=>createOrder(body,'staff',id,actor),changeCombo,pay,transition,saveMenu,recipes,saveRecipe,report,snapshot,...inventory,...control};
 }

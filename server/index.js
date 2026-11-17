@@ -32,6 +32,7 @@ export function createApp(store) {
  app.get('/api/events',auth(),(req,res)=>{res.setHeader('Content-Type','text/event-stream');res.setHeader('Cache-Control','no-cache');res.setHeader('Connection','keep-alive');res.flushHeaders();res.write('data: connected\n\n');clients.add(res);const timer=setInterval(()=>res.write(': heartbeat\n\n'),25000);req.on('close',()=>{clearInterval(timer);clients.delete(res);});});
  app.post('/api/orders',staff,(req,res)=>{const order=store.createOrder(req.body);notify();res.status(201).json(order);});
  app.post('/api/orders/:id/edit',staff,(req,res)=>{const order=store.editOrder(Number(req.params.id),req.body,req.user);notify();res.json(order);});
+ app.post('/api/orders/:id/combo',staff,(req,res)=>{const order=store.changeCombo(Number(req.params.id),req.body,req.user);notify();res.json(order);});
  app.post('/api/orders/:id/pay',staff,(req,res)=>{store.transaction(()=>store.pay(Number(req.params.id),req.body.method));notify();res.json({ok:true});});
  app.post('/api/orders/:id/status',auth(),(req,res)=>{store.transition(Number(req.params.id),req.body.status,req.user.role);notify();res.json({ok:true});});
  app.post('/api/menu',admin,express.json({limit:'16mb'}),(req,res)=>{store.saveMenu(req.body);notify();res.json({ok:true});});

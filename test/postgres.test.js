@@ -30,6 +30,14 @@ test('PostgreSQL: startup, orders, stock, payment, reporting and competing reser
   const winner=await response.find(r=>r.status===201).json();
   const login=await fetch(`http://127.0.0.1:${ports[0]}/api/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'admin',password:'admin123'})});assert.equal(login.status,200);const cookie=login.headers.get('set-cookie').split(';')[0];
   const state=await fetch(`http://127.0.0.1:${ports[0]}/api/state?date=${date}`,{headers:{cookie}});assert.equal(state.status,200);const data=await state.json();assert.equal(data.menu.items.find(i=>i.id===main.id).available,0);assert.equal(data.orders.length,1);
+  const otherMain=data.menu.items.find(i=>i.kind==='main'&&i.id!==main.id), line=data.orders[0].lines[0];
+  const kitchenLogin=await fetch(`http://127.0.0.1:${ports[0]}/api/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'cocina',password:'cocina123'})});
+  const kitchenCookie=kitchenLogin.headers.get('set-cookie').split(';')[0];
+  const denied=await fetch(`http://127.0.0.1:${ports[0]}/api/orders/${winner.id}/combo`,{method:'POST',headers:{cookie:kitchenCookie,'Content-Type':'application/json'},body:JSON.stringify({lineId:line.id,revision:0,quantity:1,mainId:otherMain.id})});assert.equal(denied.status,403);
+  const change=async (revision,mainId)=>fetch(`http://127.0.0.1:${ports[0]}/api/orders/${winner.id}/combo`,{method:'POST',headers:{cookie,'Content-Type':'application/json'},body:JSON.stringify({lineId:line.id,revision,quantity:1,mainId})});
+  assert.equal((await change(0,otherMain.id)).status,200);
+  assert.equal((await change(0,main.id)).status,409);
+  assert.equal((await change(1,main.id)).status,200);
   const payment=await fetch(`http://127.0.0.1:${ports[0]}/api/orders/${winner.id}/pay`,{method:'POST',headers:{cookie,'Content-Type':'application/json'},body:JSON.stringify({method:'cash'})});
   // The business automatically closes at 18:00 Bolivia, independent of the host timezone.
   if(data.cash.closed_at) assert.equal(payment.status,409); else {assert.equal(payment.status,200);const report=await (await fetch(`http://127.0.0.1:${ports[0]}/api/reports?from=${date}&to=${date}`,{headers:{cookie}})).json();assert.equal(report.income,2500);}
