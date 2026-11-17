@@ -34,6 +34,8 @@ export function createApp(store) {
  app.post('/api/orders/:id/pay',staff,(req,res)=>{store.transaction(()=>store.pay(Number(req.params.id),req.body.method));notify();res.json({ok:true});});
  app.post('/api/orders/:id/status',auth(),(req,res)=>{store.transition(Number(req.params.id),req.body.status,req.user.role);notify();res.json({ok:true});});
  app.post('/api/menu',admin,express.json({limit:'16mb'}),(req,res)=>{store.saveMenu(req.body);notify();res.json({ok:true});});
+ app.get('/api/recipes',admin,(req,res)=>res.json(store.recipes(req.query.date||store.today())));
+ app.post('/api/recipes',admin,(req,res)=>{const result=store.saveRecipe(req.body);notify();res.status(201).json(result);});
  app.get('/api/inventory',admin,(req,res)=>res.json(store.inventory()));
  app.post('/api/inventory/products',admin,express.json({limit:'256kb'}),(req,res)=>{const id=store.saveProduct(req.body);notify();res.json({id});});
  app.post('/api/inventory/movements',admin,(req,res)=>{store.movement(req.body,req.user.username);notify();res.json({ok:true});});

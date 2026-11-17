@@ -19,3 +19,5 @@
 .beverage-photo{margin:18px 0}.beverage-photo .photo-preview{width:120px;height:100px}.beverage-photo input[type=file]{font-size:12px;padding:10px}
 
 .audit-title{margin-top:28px}.sidebar nav{overflow-y:auto;min-height:0}.sidebar-bottom{flex-shrink:0}
+
+.cost-row{display:grid;grid-template-columns:2fr 1fr 1fr 1.5fr auto;gap:12px;align-items:end;margin:14px 0}.cost-row label{min-width:0;margin:0}.cost-row button{margin-bottom:3px}.service-row{grid-template-columns:2fr 1.5fr auto}.recipe-estimate{display:flex;gap:16px;flex-wrap:wrap;padding:16px;background:#edf0e7;border-radius:10px;margin:16px 0}.recipe-history{border-top:1px solid #e4e7df;padding:18px 0}.recipe-history .row-actions{margin-top:14px}.recipe-history h3 small{display:block;font-weight:400;margin-top:6px}.recipe-note{white-space:pre-wrap}.service-mode{display:block;font-weight:700;color:#173e35;margin:7px 0}.cost-row input,.cost-row select{width:100%}@media(max-width:760px){.cost-row{grid-template-columns:1fr 1fr}.cost-row button{justify-self:start}.service-row{grid-template-columns:1fr}.recipe-estimate{flex-direction:column;gap:8px}}

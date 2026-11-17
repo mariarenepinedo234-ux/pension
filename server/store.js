@@ -33,6 +33,8 @@ export function createStore(filename, { seed = true, now = () => new Date() } = 
     db.exec("ALTER TABLE items ADD COLUMN combo_eligible INTEGER NOT NULL DEFAULT 0; UPDATE items SET combo_eligible=1 WHERE id IN (SELECT MIN(id) FROM items WHERE kind='drink' GROUP BY date)");
   }
   if(!db.prepare('PRAGMA table_info(items)').all().some(c=>c.name==='photo')) db.exec("ALTER TABLE items ADD COLUMN photo TEXT NOT NULL DEFAULT ''");
+  if(!db.prepare('PRAGMA table_info(orders)').all().some(c=>c.name==='service_mode')) db.exec("ALTER TABLE orders ADD COLUMN service_mode TEXT NOT NULL DEFAULT 'unspecified'");
+  db.exec(`CREATE TABLE IF NOT EXISTS recipes(id INTEGER PRIMARY KEY, date TEXT NOT NULL, name TEXT NOT NULL, kind TEXT NOT NULL, portions INTEGER NOT NULL, price INTEGER NOT NULL, ingredients TEXT NOT NULL, services TEXT NOT NULL, total INTEGER NOT NULL, note TEXT NOT NULL, created_at TEXT NOT NULL);`);
   const all = (sql,...args) => db.prepare(sql).all(...args);
   const get = (sql,...args) => db.prepare(sql).get(...args);
   const run = (sql,...args) => db.prepare(sql).run(...args);
@@ -64,6 +66,8 @@ export function createStore(filename, { seed = true, now = () => new Date() } = 
   function orders(date) { return all(`SELECT o.*,p.method,p.amount AS paid FROM orders o LEFT JOIN payments p ON p.order_id=o.id WHERE o.date=? ORDER BY o.id DESC`,date).map(o=>({...o,lines:all('SELECT * FROM lines WHERE order_id=?',o.id)})); }
   function createOrder(body, source='staff') { return transaction(()=>{
     const date=validDate(body.date);
+    const serviceMode=body.service_mode??'local';
+    if(!['local','takeaway'].includes(serviceMode)) fail('Selecciona consumo en el local o para llevar.');
     if(date<today()) fail('No se aceptan pedidos para fechas pasadas.');
     const day=get('SELECT * FROM days WHERE date=?',date);
     if(!day || (source==='public' && !day.published)) fail('El menú aún no está publicado.');
@@ -91,6 +95,7 @@ export function createStore(filename, { seed = true, now = () => new Date() } = 
     for(const [id,q] of products){const p=get('SELECT * FROM products WHERE id=?',id);if(p.stock<q)fail(`No alcanza ${p.name}. Quedan ${p.stock} unidades.`,409);}
     if(body.expectedTotal !== undefined && body.expectedTotal !== total) fail('El precio del menú cambió. Actualiza la página y revisa tu pedido antes de confirmarlo.',409);
     const id=Number(run('INSERT INTO orders(date,customer,phone,note,type,source,status,total,created_at) VALUES (?,?,?,?,?,?,?,?,?)',date,customer,String(body.phone||'').slice(0,30),String(body.note||'').slice(0,500),reservation?'reservation':'sale',source,reservation?'reserved':'queued',total,stamp()).lastInsertRowid);
+    run('UPDATE orders SET service_mode=? WHERE id=?',serviceMode,id);
     for(const l of lines) run('INSERT INTO lines(order_id,label,quantity,price) VALUES (?,?,?,?)',id,l.label,l.quantity,l.price);
     for(const [itemId,q] of allocations) {run('INSERT INTO allocations VALUES (?,?,?)',id,itemId,q);run('UPDATE items SET used=used+? WHERE id=?',q,itemId);}
     for(const [productId,q] of products){run('INSERT INTO product_allocations VALUES (?,?,?)',id,productId,q);inventory.changeStock(productId,-q,'order',id);}
@@ -141,6 +146,23 @@ export function createStore(filename, { seed = true, now = () => new Date() } = 
     }
     for(const old of all('SELECT * FROM items WHERE date=?',date)) if(old.kind!=='drink' && !old.combo_eligible && !keep.includes(old.id)) {if(old.used || get('SELECT order_id FROM allocations WHERE item_id=?',old.id)) fail('No puedes eliminar un plato con historial de pedidos. Puedes dejar su cantidad igual a las porciones comprometidas.');run('DELETE FROM items WHERE id=?',old.id);}
   });}
+  function recipes(date) {
+    validDate(date);
+    return all('SELECT * FROM recipes WHERE date=? ORDER BY id DESC',date).map(r=>({...r,ingredients:JSON.parse(r.ingredients),services:JSON.parse(r.services),unit_cost:r.total/r.portions,margin:r.price-r.total/r.portions}));
+  }
+  function saveRecipe(body) {
+    const date=validDate(body.date),name=String(body.name||'').trim(),portions=Number(body.portions);
+    if(!name||name.length>100||!['soup','main','extra'].includes(body.kind)||!Number.isInteger(portions)||portions<1||portions>10000) fail('Revisa el nombre, categoría y porciones de la receta.');
+    const price=money(body.price);
+    const amount=value=>{const n=Number(value);if(value===''||value===null||!Number.isFinite(n)||n<0||n>1000000)fail('Costo inválido.');return Math.round(n*100);};
+    if(!Array.isArray(body.ingredients)||!body.ingredients.length||body.ingredients.length>80||!Array.isArray(body.services)||body.services.length>20)fail('Agrega ingredientes y revisa los gastos de preparación.');
+    const ingredients=body.ingredients.map(i=>{const name=String(i.name||'').trim(),quantity=Number(i.quantity);if(!name||name.length>100||!Number.isFinite(quantity)||quantity<=0||quantity>1000000||!['g','kg','ml','l','unidad','docena','cucharada','cucharadita','taza'].includes(i.unit))fail('Revisa ingrediente, cantidad y unidad.');return {name,quantity,unit:i.unit,cost:amount(i.cost)};});
+    const services=body.services.map(i=>{const name=String(i.name||'').trim();if(!name||name.length>100)fail('Describe el gasto de preparación.');return {name,cost:amount(i.cost)};});
+    const total=[...ingredients,...services].reduce((sum,i)=>sum+i.cost,0);
+    if(total>100000000)fail('El costo total supera el límite permitido.');
+    const id=Number(run('INSERT INTO recipes(date,name,kind,portions,price,ingredients,services,total,note,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)',date,name,body.kind,portions,price,JSON.stringify(ingredients),JSON.stringify(services),total,String(body.note||'').slice(0,1000),stamp()).lastInsertRowid);
+    return {id};
+  }
   function report(from,to) {
     validDate(from);validDate(to);if(from>to) fail('El rango de fechas no es válido.');
     const revenue=all('SELECT date,method,SUM(amount) AS amount,COUNT(*) AS count FROM payments WHERE date BETWEEN ? AND ? GROUP BY date,method',from,to);
@@ -150,5 +172,5 @@ export function createStore(filename, { seed = true, now = () => new Date() } = 
     return {from,to,income,spent,balance:income-spent,cash,qr,revenue,expenses,count:revenue.reduce((s,r)=>s+r.count,0)};
   }
   function snapshot(date) {reconcile();return {today:today(),date,menu:menu(date),orders:orders(date),cash:get('SELECT * FROM cash_days WHERE date=?',today()),report:report(date,date)};}
-  return {db,all,get,run,transaction,today,stamp,reconcile,openCash,menu,orders,createOrder,pay,transition,saveMenu,report,snapshot,...inventory,...control};
+  return {db,all,get,run,transaction,today,stamp,reconcile,openCash,menu,orders,createOrder,pay,transition,saveMenu,recipes,saveRecipe,report,snapshot,...inventory,...control};
 }

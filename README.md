@@ -129,3 +129,19 @@ test/system.test.js  Pruebas de negocio y API (sin tocar los datos locales)
 Entidades: `audit_log`, `users`, `sessions`, `days` (menús diarios), `items` (producción y porciones comprometidas), `orders`, `lines`, `allocations` (componentes consumidos), `products`, `product_allocations`, `inventory_movements`, `legacy_products`, `payments`, `cash_days` y `expenses`.
 
 Siguientes mejoras posibles: turnos y horario configurables, cambios de pedidos y devoluciones con auditoría, reservas con hora límite, impresión de tickets, costos por receta, múltiples sucursales y despliegue público. Para varias sucursales o varios servidores, migrar a PostgreSQL sería un siguiente paso razonable; para un negocio y un servidor, SQLite evita instalaciones adicionales.
+
+## Platos y costos de preparación
+
+El administrador dispone de **Platos y costos**. Elige la fecha y registra una sopa, segundo o extra con las porciones que rinde toda la preparación, su precio de venta por porción, ingredientes y gastos como gas, luz o agua. Las cantidades admiten gramos, kilos, mililitros, litros, unidades, docenas, cucharadas, cucharaditas y tazas; por ejemplo, medio kilo puede anotarse como `0,5 kg` o `500 g`.
+
+El costo de cada ingrediente corresponde **a la cantidad utilizada**, no al paquete completo: si usaste 100 g de una bolsa de arroz, introduce el costo de esos 100 g. No se calcula automáticamente a partir de precios de compra ni se mantiene inventario de ingredientes. El sistema suma ingredientes y servicios, divide entre las porciones y muestra el margen estimado respecto al precio de venta. Este margen no incluye otros gastos del negocio ni equivale a ganancia neta; tampoco calcula el costo del completo combinando recetas.
+
+Cada guardado crea una versión independiente con fecha, ingredientes, costos y observaciones. Cambia la fecha para revisar recetas anteriores. **Reutilizar receta** carga una copia: puedes elegir otra fecha y guardarla conservando el registro original. **Agregar al menú de esta fecha** agrega nombre, categoría, precio y porciones al borrador del menú; revisa cantidades y guarda el menú para confirmar. Los costos de la receta se consultan en su historial y no modifican precios de pedidos anteriores.
+
+Registrar recetas no crea gastos de caja: documenta los pagos reales en **Caja y gastos** para no duplicarlos. Los envases también se registran allí, sin recargo automático ni costo de envase por plato.
+
+## Consumo en el local o para llevar
+
+Al registrar una venta o reserva, incluida la reserva pública, selecciona **Consumir en el local** o **Para llevar** para todo el pedido. La modalidad se conserva al reiniciar y aparece en Pedidos y reservas y en los tickets de Cocina; no cambia el precio ni el inventario. Los pedidos anteriores a esta actualización muestran **Consumo sin especificar**, para no atribuirles una modalidad que no fue registrada. En un pedido con ambas modalidades, registra dos pedidos separados.
+
+La actualización agrega automáticamente las tablas de recetas y la modalidad de consumo al arrancar. Conserva usuarios, recetas, pedidos y demás datos existentes; respalda `data` con el servidor detenido antes de actualizar.
