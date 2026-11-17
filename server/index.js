@@ -56,7 +56,8 @@ export function createApp(store) {
  app.locals.notify=notify;app.locals.stop=()=>{for(const client of clients)client.end();};return app;
 }
 if(process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1])).href) {
- const store=createStore(process.env.DB_PATH||resolve('data/foodsys.sqlite'));
+ if(!/^postgres(?:ql)?:\/\//i.test(process.env.DATABASE_URL||'')) throw new Error('DATABASE_URL debe contener una URL de PostgreSQL.');
+ const store=createStore(process.env.DATABASE_URL);
  const app=createApp(store);app.listen(Number(process.env.PORT)||3001,'0.0.0.0',()=>console.log('Foodsys API lista en puerto '+(process.env.PORT||3001)));
  setInterval(()=>{store.reconcile();app.locals.notify();},60000).unref();
 }

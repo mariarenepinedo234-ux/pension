@@ -1,6 +1,7 @@
 import { controlStore } from './control.js';
 import { inventoryStore } from './inventory.js';
 import { DatabaseSync } from 'node:sqlite';
+import { PostgresDatabase } from './postgres.js';
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -16,8 +17,9 @@ export function fail(message, status = 400) { const error = new Error(message); 
 export const money = value => { const n = Number(value); if (!Number.isFinite(n) || n < 0.01 || n > 1000000) fail('Importe inválido.'); return Math.round(n * 100); };
 export function validDate(value) { if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '') || Number.isNaN(Date.parse(value)) || new Date(value).toISOString().slice(0,10) !== value) fail('Fecha inválida.'); return value; }
 export function createStore(filename, { seed = true, now = () => new Date() } = {}) {
-  if (filename !== ':memory:') mkdirSync(dirname(filename), { recursive:true });
-  const db = new DatabaseSync(filename);
+  const isPostgres=/^postgres(?:ql)?:\/\//i.test(filename);
+  if (!isPostgres && filename !== ':memory:') mkdirSync(dirname(filename), { recursive:true });
+  const db = isPostgres ? new PostgresDatabase(filename) : new DatabaseSync(filename);
   db.exec(`PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
     CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, name TEXT NOT NULL, username TEXT UNIQUE NOT NULL, password TEXT NOT NULL, role TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY, user_id INTEGER REFERENCES users(id), expires INTEGER NOT NULL);
@@ -64,6 +66,7 @@ export function createStore(filename, { seed = true, now = () => new Date() } = 
   }
   const inventory=inventoryStore({db,all,get,run,transaction,today,stamp,openCash,fail,money,validDate});
   reconcile();
+  if(isPostgres) db.ready();
   function menu(date, publicOnly=false) { validDate(date); const day=get('SELECT * FROM days WHERE date=?',date); return day && (!publicOnly || day.published) ? {...day,items:[...all("SELECT *,stock-used AS available FROM items WHERE date=? AND combo_eligible=0 AND kind<>'drink' ORDER BY id",date),...inventory.catalog()]} : {date,combo_price:2500,published:0,items:[]}; }
   function orders(date) { return all(`SELECT o.*,p.method,p.amount AS paid FROM orders o LEFT JOIN payments p ON p.order_id=o.id WHERE o.date=? ORDER BY o.id DESC`,date).map(o=>({...o,lines:all('SELECT * FROM lines WHERE order_id=?',o.id)})); }
   function createOrder(body, source='staff', editId=null, actor=null) { return transaction(()=>{

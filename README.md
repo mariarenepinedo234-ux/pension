@@ -1,19 +1,20 @@
 # Foodsys
 
-Primera versión de un sistema web para pensiones, restaurantes y comida rápida. JavaScript en el navegador, Node.js + Express en el servidor y SQLite como base de datos local. No necesita Python, Docker, una cuenta externa ni instalar un servidor de base de datos.
+Primera versión de un sistema web para pensiones, restaurantes y comida rápida. JavaScript en el navegador, Node.js + Express en el servidor y PostgreSQL como base de datos.
 
 ## Iniciar en Windows
 
-Instala **Node.js 24 LTS** (incluye npm). Descarga o clona este repositorio y abre una terminal dentro de su carpeta:
+Instala **Node.js 24 LTS** y prepara una base PostgreSQL vacía. Descarga o clona este repositorio y abre una terminal dentro de su carpeta. Configura `DATABASE_URL` con la URL privada de tu base en la misma terminal; no la compartas ni la guardes en Git:
 
 ```powershell
-npm.cmd install
+$env:DATABASE_URL = 'postgresql://USUARIO:CONTRASEÑA@SERVIDOR:5432/BASE'
+npm.cmd ci
 npm.cmd run dev
 ```
 
 Abre **http://localhost:5173**. Mantén la terminal abierta mientras uses el sistema. Para detenerlo, presiona `Ctrl+C`. En macOS/Linux los comandos son `npm install` y `npm run dev`.
 
-Node.js es el único requisito: esta aplicación utiliza el módulo SQLite incluido en Node 24. Si tu versión es anterior, actualízala. La primera instalación requiere Internet; las fuentes, el QR y los recursos de la aplicación quedan instalados localmente.
+Se requieren Node.js 24 o superior y PostgreSQL. La primera instalación requiere Internet; las fuentes, el QR y los recursos de la aplicación quedan instalados localmente. En macOS/Linux usa `export DATABASE_URL=...` antes de iniciar. No se carga un archivo `.env` automáticamente.
 
 ### Usuarios iniciales de demostración
 
@@ -28,7 +29,7 @@ Son cuentas para probar localmente. Antes del **primer arranque** puedes definir
 ## Qué puedes probar
 
 1. Entra como administrador. Se crea un menú de ejemplo para la fecha de Bolivia del primer inicio: 50 sopas de maní, 35 milanesas de pollo, 25 asados, gaseosas y extras. Son cantidades y precios editables, no ventas ficticias.
-2. En **Menú del día**, elige la fecha, define platos, precios y producción total. Publica el menú para habilitar las reservas públicas. Puedes preparar el menú de mañana. Cada producto permite cargar o quitar una foto JPEG, PNG o WebP (hasta 10 MB de entrada); el navegador la reduce antes de guardarla en SQLite. Las fotos también se muestran en el catálogo de venta y reservas. No se copia automáticamente el menú de ayer.
+2. En **Menú del día**, elige la fecha, define platos, precios y producción total. Publica el menú para habilitar las reservas públicas. Puedes preparar el menú de mañana. Cada producto permite cargar o quitar una foto JPEG, PNG o WebP (hasta 10 MB de entrada); el navegador la reduce antes de guardarla en la base de datos. Las fotos también se muestran en el catálogo de venta y reservas. No se copia automáticamente el menú de ayer.
 3. En **Punto de venta**, agrega completos o platos sueltos. Un completo contiene una sopa y un segundo a elección, más un vaso de refresco incluido automáticamente. No se elige, no se registra como producto ni se vende suelto. Las gaseosas y otras bebidas se pueden vender por separado. El precio del completo es independiente de la suma de precios individuales.
 4. El nombre en caja es **Cliente sin nombre** por defecto y se puede editar; las reservas públicas siguen solicitando el nombre. Elige **Venta** para enviar el pedido inmediatamente a cocina, o **Reserva** para apartar porciones sin empezar a prepararlas. Puedes registrar las reservas recibidas por WhatsApp. No existe integración automática con WhatsApp.
 5. Registra el cobro en efectivo o por QR, o déjalo pendiente. Seleccionar QR significa que el cajero **ya verificó el abono en su banco**. No hay pasarela, cargo automático ni verificación bancaria.
@@ -58,16 +59,16 @@ Entra como administrador a **Inventario de bebidas**. Registra cada bebida una s
 - **Mercadería recibida:** registra cantidad, fecha real de recepción, proveedor, costo total y observaciones. El saldo aumenta al recibirla, no al encargarla. No se implementa seguimiento de órdenes de compra pendientes.
 - **Caja:** si la compra se pagó hoy con caja abierta, puedes marcar «Registrar también el pago como gasto de caja» e indicar efectivo o QR. El gasto y la entrada se guardan juntos; no registres ese mismo pago nuevamente en Caja. Guardar un costo sin esa marca solo lo documenta en inventario.
 - **Ajustes:** registra una cantidad positiva o negativa y un motivo obligatorio para roturas o diferencias de conteo. No puede dejar saldo negativo. El saldo disponible ya excluye las reservas.
-- **Historial:** muestra las últimas 200 entradas, saldos iniciales/importados, ventas, reservas, anulaciones y ajustes; todos los movimientos quedan guardados en SQLite. Las entradas manuales registran el usuario.
+- **Historial:** muestra las últimas 200 entradas, saldos iniciales/importados, ventas, reservas, anulaciones y ajustes; todos los movimientos quedan guardados en PostgreSQL. Las entradas manuales registran el usuario.
 - **Edición:** permite cambiar precio, mínimo o nombre y retirar una bebida de venta sin borrar su historial. Los pedidos anteriores conservan el precio y nombre originales.
 
 Al actualizar una base existente, las bebidas del menú se importan una sola vez, agrupadas por nombre (sin distinguir mayúsculas ni espacios al inicio/final). Se usa el saldo disponible del menú más reciente hasta hoy; si solo existen menús futuros, se usa el más reciente de ellos. **No se suman los conteos diarios repetidos. Verifica una vez el conteo físico y registra un ajuste si hace falta**, especialmente si las bebidas se registraron con nombres diferentes o quedaron reservas antiguas de varios días. Los platos, pagos y pedidos existentes se conservan; anular una reserva antigua también libera sus bebidas. Las fotos anteriores de las bebidas se conservan.
 
-Para actualizar, detén el servidor, respalda la carpeta `data`, reemplaza los archivos de código conservando `data`, ejecuta `npm ci`, `npm run build` y `npm start`. La migración es automática al arrancar. Las pruebas usan bases aisladas y no modifican tu base local.
+Para actualizar, respalda PostgreSQL, despliega el código y ejecuta `npm ci`, `npm run build` y `npm start` con `DATABASE_URL` configurada. Las pruebas usan bases aisladas y no modifican la base de producción.
 
 ## Reglas de inventario y dinero
 
-- Registrar un pedido compromete las porciones en una transacción SQLite. Un completo descuenta una sopa y el segundo elegido. El vaso de refresco está incluido en el precio, sin stock ni precio independientes. Cada segundo tiene su disponibilidad independiente.
+- Registrar un pedido compromete las porciones en una transacción PostgreSQL. Un completo descuenta una sopa y el segundo elegido. El vaso de refresco está incluido en el precio, sin stock ni precio independientes. Cada segundo tiene su disponibilidad independiente.
 - Los refrescos marcados anteriormente como incluidos se conservan internamente con sus registros históricos, pero se ocultan del menú editable y del catálogo. Los pedidos antiguos conservan precios, detalle y asignaciones; su anulación sigue liberando las porciones originales.
 - Una reserva ya cuenta contra el stock. Cobrarla o pasarla a cocina **no descuenta de nuevo**.
 - Los platos sueltos y los extras descuentan solo su producto. Las cantidades y los precios se validan en el servidor, no se confía en los importes del navegador.
@@ -95,16 +96,14 @@ Para compartir reservas fuera de la red local necesitas desplegar el servidor co
 
 ## Datos y copias de seguridad
 
-Los datos se conservan al reiniciar en `data/foodsys.sqlite`; `data/` está excluido de Git. SQLite puede crear archivos `-wal` y `-shm`. Para una copia manual consistente, detén el servidor con `Ctrl+C` y copia la carpeta `data` completa. No sincronices una base abierta entre computadoras ni coloques el archivo en una carpeta de red. Todos los dispositivos deben usar el mismo servidor.
+Los datos se almacenan en PostgreSQL y persisten al reiniciar la aplicación. Configura copias de seguridad en el proveedor de la base y verifica cómo restaurarlas. La primera conexión a una base vacía crea las tablas, usuarios iniciales y menú de ejemplo. El cambio a PostgreSQL no importa automáticamente bases SQLite antiguas; conserva una copia de la base anterior si necesitas sus datos.
 
-Para empezar desde cero, detén el servidor y **respalda** `data` antes de retirarla. El siguiente inicio creará una base nueva con usuarios y menú de ejemplo. No borres datos reales para cambiar una contraseña.
-
-Variables opcionales del servidor:
+En Render, crea una base PostgreSQL, conecta su URL interna al servicio web mediante la variable de entorno `DATABASE_URL` y configura el despliegue para ejecutar `npm ci && npm run build` y arrancar con `npm start`. Antes del primer arranque define `ADMIN_PASSWORD`, `CAJERO_PASSWORD` y `COCINA_PASSWORD` en las variables de entorno del servicio. Las contraseñas iniciales solo se usan al crear usuarios y no cambian cuentas ya existentes. Gestiona la URL y las contraseñas en Render, sin colocarlas en el repositorio.
 
 | Variable | Valor por defecto | Uso |
 | --- | --- | --- |
+| `DATABASE_URL` | obligatoria | URL de conexión de PostgreSQL |
 | `PORT` | `3001` | Puerto del API y del servidor de producción |
-| `DB_PATH` | `data/foodsys.sqlite` | Ruta al archivo de base de datos |
 | `COOKIE_SECURE` | sin definir | `true` para cookies solo por HTTPS al desplegar |
 | `ADMIN_PASSWORD`, `CAJERO_PASSWORD`, `COCINA_PASSWORD` | credenciales demo | Contraseñas solo en la creación inicial |
 
@@ -113,7 +112,7 @@ El proxy de Vite apunta al puerto 3001: no cambies `PORT` durante desarrollo sin
 ## Comandos y estructura
 
 ```powershell
-npm.cmd test         # Pruebas de reglas de negocio y API HTTP, con SQLite en memoria
+npm.cmd test         # Pruebas de reglas de negocio; PostgreSQL se prueba si TEST_DATABASE_URL está definida
 npm.cmd run build    # Genera el frontend en dist/
 npm.cmd start        # Sirve API + dist/ en http://localhost:3001 después del build
 ```
@@ -121,14 +120,16 @@ npm.cmd start        # Sirve API + dist/ en http://localhost:3001 después del b
 ```text
 src/main.js          Pantallas y comportamiento del navegador
 src/style.css        Diseño responsive y estilos
-server/store.js      Esquema SQLite y reglas de negocio
+server/store.js      Esquema y reglas de negocio
 server/index.js      Autenticación, permisos, API, eventos y servidor
 test/system.test.js  Pruebas de negocio y API (sin tocar los datos locales)
 ```
 
+Para ejecutar la prueba de integración con PostgreSQL, define `TEST_DATABASE_URL` apuntando a una base de pruebas y ejecuta `node --test test/postgres.test.js`. La prueba crea y elimina un esquema temporal; nunca uses una base que no permita ese aislamiento. Las demás pruebas conservan SQLite en memoria para verificar la lógica existente.
+
 Entidades: `audit_log`, `users`, `sessions`, `days` (menús diarios), `items` (producción y porciones comprometidas), `orders`, `lines`, `allocations` (componentes consumidos), `products`, `product_allocations`, `inventory_movements`, `legacy_products`, `payments`, `cash_days` y `expenses`.
 
-Siguientes mejoras posibles: turnos y horario configurables, cambios de pedidos y devoluciones con auditoría, reservas con hora límite, impresión de tickets, costos por receta, múltiples sucursales y despliegue público. Para varias sucursales o varios servidores, migrar a PostgreSQL sería un siguiente paso razonable; para un negocio y un servidor, SQLite evita instalaciones adicionales.
+Siguientes mejoras posibles: turnos y horario configurables, cambios de pedidos y devoluciones con auditoría, reservas con hora límite, impresión de tickets, costos por receta, múltiples sucursales y despliegue público. Las notificaciones en vivo se envían desde cada proceso; para varias instancias del servidor se necesita un mecanismo compartido de eventos.
 
 ## Platos y costos de preparación
 

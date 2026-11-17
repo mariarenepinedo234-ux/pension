@@ -50,6 +50,6 @@ export function inventoryStore({db,all,get,run,transaction,today,stamp,openCash,
   run('INSERT INTO inventory_movements(product_id,quantity,type,date,created_at,order_id) VALUES (?,?,?,?,?,?)',productId,quantity,type,today(),stamp(),orderId);
  }
  const inventory=()=>({products:all('SELECT * FROM products ORDER BY name,id'),movements:all('SELECT m.*,p.name FROM inventory_movements m JOIN products p ON p.id=m.product_id ORDER BY m.id DESC LIMIT 200')});
- const catalog=()=>all("SELECT -id AS id,id AS productId,name,'drink' AS kind,price,stock,0 AS used,stock AS available,0 AS combo_eligible,photo FROM products WHERE active=1 ORDER BY id");
+ const catalog=()=>all("SELECT -id AS id,id AS \"productId\",name,'drink' AS kind,price,stock,0 AS used,stock AS available,0 AS combo_eligible,photo FROM products WHERE active=1 ORDER BY id");
  return {inventory,saveProduct,movement,changeStock,catalog};
 }
