@@ -1,0 +1,33 @@
+PRUEBAS LOCALES DE FOODSYS (PENSIÓN)
+
+Este paquete crea una base NUEVA para pruebas. No se conecta a Railway ni copia sus datos.
+Requisitos: Node.js 24 o superior (https://nodejs.org/), Docker Desktop (https://www.docker.com/products/docker-desktop/) y conexión a Internet para la primera instalación.
+
+WINDOWS (PowerShell)
+1. Descomprime el ZIP y abre PowerShell dentro de la carpeta pension.
+2. Abre Docker Desktop y espera a que esté iniciado.
+3. Crea PostgreSQL de prueba con este comando (la contraseña es solo para tu computadora):
+   docker run --name pension-postgres-local -e POSTGRES_USER=pension -e POSTGRES_PASSWORD=prueba_local_2026 -e POSTGRES_DB=pension_pruebas -p 127.0.0.1:55432:5432 -d postgres:17
+   Espera unos segundos. Si ya existe el contenedor, usa: docker start pension-postgres-local
+4. En la misma ventana PowerShell ejecuta:
+   $env:DATABASE_URL = 'postgresql://pension:prueba_local_2026@127.0.0.1:55432/pension_pruebas'
+   npm.cmd ci
+   npm.cmd run build
+   npm.cmd test
+   npm.cmd run dev
+5. Abre http://localhost:5173 en tu navegador. Acceso de prueba: admin / admin123. La base se crea automáticamente con usuarios y un menú de ejemplo. Detén la aplicación con Ctrl+C.
+
+La prueba específica de PostgreSQL es opcional. Detén npm run dev y ejecuta en PowerShell:
+   $env:TEST_DATABASE_URL = $env:DATABASE_URL
+   node --test test/postgres.test.js
+Esta prueba crea y elimina un esquema temporal. Usa solo la base local de pruebas, nunca la de producción.
+
+Para volver a abrir la aplicación otro día, inicia Docker Desktop, ejecuta docker start pension-postgres-local, vuelve a definir DATABASE_URL y ejecuta npm.cmd run dev. Los datos de prueba permanecen en el contenedor hasta que lo elimines. Para detener PostgreSQL sin borrar datos: docker stop pension-postgres-local
+
+Si el puerto 55432 está ocupado, cambia la primera parte del parámetro -p (por ejemplo 55433:5432) y usa ese mismo puerto en DATABASE_URL. Si Docker o PostgreSQL no arranca, revisa Docker Desktop. No compartas contraseñas ni URL reales.
+
+macOS / Linux: usa los mismos comandos Docker; sustituye la línea $env:DATABASE_URL por:
+   export DATABASE_URL='postgresql://pension:prueba_local_2026@127.0.0.1:55432/pension_pruebas'
+Usa npm en vez de npm.cmd. Para la prueba PostgreSQL: export TEST_DATABASE_URL="$DATABASE_URL"
+
+Para más información consulta README.md. El crédito, base de datos y despliegue de Railway son independientes de estas pruebas.
